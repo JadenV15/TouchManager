@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Venv
+venv/
+env/
+.venv/
+
+# PyInstaller
+build/
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
