@@ -1,0 +1,1 @@
+"""This package contains custom dialogs (not included in tkinter)"""

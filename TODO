@@ -1,0 +1,5 @@
+Possible enhancements:
+- Check that the OS is Windows>=Vista, and that `pnputil` and `powershell` can be accessed
+- Set English locale/culture for Run commands
+- Tkinter themes
+- Refactoring some MVC code to be more DRY

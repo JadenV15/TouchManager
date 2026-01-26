@@ -1,0 +1,82 @@
+PS C:\WINDOWS\system32> # https://learn.microsoft.com/en-us/windows-hardware/drivers/develop/test-a-driver-package-manual-deployment
+PS C:\WINDOWS\system32> pnputil /enum-devices
+Microsoft PnP Utility
+
+Instance ID:                ACPI\INTC1070\2&daba3ff&0
+Device Description:         Intel(R) HID Event Filter
+Class Name:                 HIDClass
+Class GUID:                 {745a17a0-74d3-11d0-b6fe-00a0c90f57da}
+Manufacturer Name:          Intel(R) Corporation
+Status:                     Started
+Driver Name:                oem341.inf
+
+Instance ID:                HID\SYNA32C7&Col02\5&36cec806&0&0001
+Device Description:         HID-compliant touch pad
+Class Name:                 HIDClass
+Class GUID:                 {745a17a0-74d3-11d0-b6fe-00a0c90f57da}
+Manufacturer Name:          (Standard system devices)
+Status:                     Started
+Driver Name:                input.inf
+
+Instance ID:                HID\VID_046D&PID_C534&MI_01&Col02\7&2e96dd6d&0&0001
+Device Description:         HID-compliant consumer control device
+Class Name:                 HIDClass
+Class GUID:                 {745a17a0-74d3-11d0-b6fe-00a0c90f57da}
+Manufacturer Name:          Microsoft
+Status:                     Disconnected
+Driver Name:                hidserv.inf
+
+[...]
+
+PS C:\WINDOWS\system32> pnputil /enum-devices /problem /deviceids
+Microsoft PnP Utility
+
+Instance ID:                USB\VID_0547&PID_1002\5&353525f&0&3
+Device Description:         WDF Sample Driver (DMF Sample 1) for OSR USB-FX2 Learning Kit
+Class Name:                 Sample
+Class GUID:                 {78a1c341-4539-11d3-b88d-00c04fad5171}
+Manufacturer Name:          OSR
+Status:                     Problem
+Problem Code:               52 (0x34) [CM_PROB_UNSIGNED_DRIVER]
+Problem Status:             0xC0000428
+Driver Name:                oem40.inf
+Hardware IDs:               USB\VID_0547&PID_1002&REV_0000
+                            USB\VID_0547&PID_1002
+Compatible IDs:             USB\COMPAT_VID_0547&Class_FF&SubClass_00&Prot_00
+                            USB\COMPAT_VID_0547&Class_FF&SubClass_00
+                            USB\COMPAT_VID_0547&Class_FF
+                            USB\Class_FF&SubClass_00&Prot_00
+                            USB\Class_FF&SubClass_00
+                            USB\Class_FF
+                            
+PS C:\Users\Jaden\Downloads> pnputil /enum-devices /disconnected
+Microsoft PnP Utility
+
+No devices were found on the system.
+
+C:\Windows\System32>pnputil /disable-device "HID\ELAN2514&Col06\5&3a1afda2&0&0005"
+Microsoft PnP Utility
+
+Failed to disable device:  HID\ELAN2514&Col06\5&3a1afda2&0&0005
+Access is denied.
+
+
+C:\Windows\System32>pnputil /disable-device "HID\ELAN2514&Col06\5&3a1afda2&0&0005"
+Microsoft PnP Utility
+
+Disabling device:          HID\ELAN2514&Col06\5&3a1afda2&0&0005
+Device disabled successfully.
+
+C:\Windows\System32>pnputil /enable-device "HID\ELAN2514&Col06\5&3a1afda2&0&0005"
+Microsoft PnP Utility
+
+Enabling device:          HID\ELAN2514&Col06\5&3a1afda2&0&0005
+Device enabled successfully.
+
+C:\Windows\System32>pnputil /enable-device "HID\ELAN2514&Col06\5&3a1afda2&0&0005"
+Microsoft PnP Utility
+
+Failed to enable device:  HID\ELAN2514&Col06\5&3a1afda2&0&0005
+Device is already enabled.
+
+This command is not supported on this OS product.

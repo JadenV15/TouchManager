@@ -1,0 +1,3 @@
+"""Assets
+Contains: app icon
+"""

@@ -1,0 +1,21 @@
+https://github.com/williamniemiec/MVC-in-Python
+https://github.com/ajongbloets/julesTk
+https://stackoverflow.com/questions/2056/what-are-mvp-and-mvc-and-what-is-the-difference
+
+- When making utils focus on "how will my program practically use this function" instead of "make it the best copmlete function for all cases", e.g. when deciding whether to use error codes or Exceptions.
+- "the only reason to make another exception is if you want to handle it differently from your other exceptions."s
+
+- EAFP
+- Separation of concerns
+- DRY
+- MVC, MVVM, MVP; Supervising Controller vs Passive View, Presentation Pattern
+- Domain vs Infrastructure failure (e.g. "supplied path not valid" vs "subprocess.run powershell Test-Path returned no output")
+- Observer pattern - Publisher, Subject
+- Decoupling
+- Pillars of OOP
+- Encapsulation
+- Lapsed listener problem, weakref
+- GC
+- Principle of least astonishment
+- Dependency graph
+- Liskov Substitution Principle

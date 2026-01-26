@@ -1,0 +1,1 @@
+"""This package contains the equivalent of GUI/CLI tkinter.messagebox API"""
