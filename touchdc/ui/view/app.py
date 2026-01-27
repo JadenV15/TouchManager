@@ -3,6 +3,7 @@
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
+from pathlib import Path
 from importlib.resources import files
 from typing import Optional, Union, List, Tuple
 
@@ -153,7 +154,8 @@ class App(tk.Tk):
         self.withdraw()
         self.title("Touch Device Manager")
         
-        ico_path = files('touchdc.assets').joinpath('icon.png')
+        #ico_path = files('touchdc.assets').joinpath('icon.png')
+        ico_path = Path(__file__).resolve().parents[2] / 'assets' / 'icon.png'
         ico = Image.open(ico_path)
         photo = ImageTk.PhotoImage(ico)
         self.photo = photo

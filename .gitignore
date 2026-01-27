@@ -10,9 +10,14 @@ env/
 .venv/
 
 # PyInstaller
+pyinstaller/
 build/
 dist/
 
 # OS files
 .DS_Store
 Thumbs.db
+
+# Custom
+gitignore/
+ignore/
