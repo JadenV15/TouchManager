@@ -3,8 +3,6 @@
 **Touch Manager** is a small, functional Tkinter app that demonstrates the **Model–View–Controller (MVC)** framework.  
 It aims to provide practical examples of what MVC can look like, how parts should be organised, and how principles like the **Observer pattern** behave in practice.
 
----
-
 ## What It Is
 
 Touch Manager is a basic interface that allows you to enable and disable touch devices (such as touchscreens and touchpads) in multiple modes.
@@ -13,8 +11,6 @@ It demonstrates:
 - Basic GUI features using Tkinter
 - How a GUI can be structured around MVC
 - How different components interact within that structure
-
----
 
 ## What It Isn’t
 
@@ -29,14 +25,10 @@ Keep in mind:
 - Tkinter is **not an ideal candidate** for MVC-style layouts
 - This implementation exists primarily as a **demonstration**
 
----
-
 ## Contributing
 
-Contributions are welcome!  
-Feel free to open an issue or submit a pull request to help improve the project.
-
----
+Please help to improve this repo by contributing!
+Feel free to open an issue or submit a PR.
 
 ## Notes
 
