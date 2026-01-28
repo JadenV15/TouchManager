@@ -259,3 +259,512 @@ A PowerShell script sets `$LASTEXITCODE` only if:
 
 Improvements include:
 - Add support for different locales/cultures (in progress)
+
+## (Original detailed below)
+
+```
+Making a util that runs powershell
+
+To run powershell, we can utilise python's subprocess module. Example:
+res = subprocess.run(['powershell', '-NoProfile', '-Command', cmd], capture_output=True, text=True)
+res.returncode # Exit code of the command
+res.stdout # Standard output
+res.stderr # Standard error
+
+Recall the 7 powershell streams:
+Stream #	Description	Introduced in	Write Cmdlet
+1	Success stream	PowerShell 2.0	Write-Output
+2	Error stream	PowerShell 2.0	Write-Error
+3	Warning stream	PowerShell 2.0	Write-Warning
+4	Verbose stream	PowerShell 2.0	Write-Verbose
+5	Debug stream	PowerShell 2.0	Write-Debug
+6	Information stream	PowerShell 5.0	Write-Information
+n/a	Progress stream	PowerShell 2.0	Write-Progress
+
+The host collapses additional streams into stdout, like with `6>&1 5>&1 4>&1 3>&1 2>$stderr >$stdout` which is collected by subprocess.
+
+If we wanted to hide the window, we could set startupinfo as follows:
+sinfo = None
+if platform.system().lower() == 'windows':
+    sinfo = subprocess.STARTUPINFO()
+    sinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+Note that if cmd is '', -Command will instead display help.
+
+Careful of quoting:
+>>> import subprocess as s
+>>> res = s.run(['powershell', '-NoProfile', '-Command', "'echo ''hi there''; exit 111'"], capture_output=True, text=True)
+>>> res.stdout
+"echo 'hi there'; exit 111\n"
+>>> res.stderr
+''
+>>> res.returncode
+0
+>>> res = s.run(['powershell', '-NoProfile', '-Command', "powershell -NoProfile -Command 'echo ''hi there''; exit 111'"], capture_output=True, text=True)
+>>> res.stdout
+'hi there\n'
+>>> res.stderr
+''
+>>> res.returncode
+1
+
+The single quotes are parsed by the parent powershell process, meaning only #2 will work.
+
+
+Elevated
+
+To run an elevated command, we must use the Start-Process cmdlet with -Verb RunAs:
+['powershell', '-NoProfile', '-Command', f"Start-Process powershell -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList @('-Command', '{cmd}')"]
+
+To capture output, we can use -RedirectStandardOutput and -RedirectStandardError:
+Start-Process powershell -Verb RunAs -WindowStyle Hidden -Wait -ArgumentList @('-Command', $cmd) -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+
+To get the returncode, we can use -PassThru:
+$p = Start-Process -PassThru ...
+$p.ExitCode # Exit code. Always an int, unless -Wait is not specified and the command has not completed yet, in which case it is $mull
+
+But wait! We get an [error](https://superuser.com/questions/280968/powershell-start-process-parameter-problems and https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process?view=powershell-5.1):
+Start-Process : Parameter set cannot be resolved using the specified named parameters.
+
+This is because there are [two](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process?view=powershell-5.1) different parameter sets in powershell 5.1 (unchanged going back even as far as 2.0/[3.0](https://learn.microsoft.com/en-gb/previous-versions/powershell/module/microsoft.powershell.management/start-process?view=powershell-3.0)):
+                
+Default
+Start-Process
+    [-FilePath] <string>
+    [[-ArgumentList] <string[]>]
+    [-Credential <pscredential>]
+    [-WorkingDirectory <string>]
+    [-LoadUserProfile]
+    [-NoNewWindow] # cannot be used in conjunction with -WindowStyle
+    [-PassThru]
+    [-RedirectStandardError <string>]
+    [-RedirectStandardInput <string>]
+    [-RedirectStandardOutput <string>]
+    [-WindowStyle <ProcessWindowStyle>] # may or may not be present in this parameter set depending on version
+    [-Wait]
+    [-UseNewEnvironment]
+    [<CommonParameters>]
+UseShellExecute
+Start-Process
+    [-FilePath] <string>
+    [[-ArgumentList] <string[]>]
+    [-WorkingDirectory <string>]
+    [-PassThru]
+    [-Verb <string>]
+    [-WindowStyle <ProcessWindowStyle>]
+    [-Wait]
+    [<CommonParameters>]
+    
+In powershell Core 7.4 (LTS), there is [one](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-process?view=powershell-7.4) parameter set: 
+Start-Process
+    [-FilePath] <string>
+    [[-ArgumentList] <string[]>]
+    [-WorkingDirectory <string>]
+    [-PassThru]
+    [-Verb <string>]
+    [-WindowStyle <ProcessWindowStyle>]
+    [-Wait]
+    [-Environment <hashtable>]
+    [-WhatIf]
+    [-Confirm]
+    [<CommonParameters>]
+    # Note: no -Redirect* or -NoNewWindow
+
+Meaning -Redirect* flags cannot be used with -Verb. And anyways, the former doesn't exist in 7.4, and remember we aim to make our script cross-version.
+
+We can still redirect from within:
+Start-Process powershell -Wait -Verb RunAs -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "$cmd >$stdout 2>$stderr")
+
+But suppose we want to run a $script not a $cmd (which would be helpful in some situations). As seen below, a simple Start-Process powershell -wait -Verb runas -argumentlist '-ExecutionPolicy Bypass -File $script >$stdout 2>$stderr [won't work](https://stackoverflow.com/questions/50765949/redirect-stdout-stderr-from-powershell-script-as-admin-through-start-process). Let's search for solution. Testing:
+
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # Testing with a file
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # test.ps1 contents: pnputil /disable-device 'HID\ELAN2514&Col01\5&3a1afda2&0&0000'
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> Start-Process powershell -wait -Verb runas -argumentlist '-ExecutionPolicy Bypass -File C:\USERS\test\DOWNLOADS\test\test.ps1 > C:\USERS\test\DOWNLOADS\test\stdout.txt 2>C:\USERS\test\DOWNLOADS\test\stderr.txt'
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # Command elevated & executed, but stdout and stderr are empty
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64>
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # Put redirection in test.ps1: pnputil /disable-device 'HID\ELAN2514&Col01\5&3a1afda2&0&0000' >C:\USERS\test\DOWNLOADS\test\stdout.txt 2>C:\USERS\test\DOWNLOADS\test\stderr.txt
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> Start-Process powershell -wait -Verb runas -argumentlist '-ExecutionPolicy Bypass -File C:\USERS\test\DOWNLOADS\test\test.ps1'
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # stdout: ... Device disabled successfully. (succeeded)
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64>
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # Revert test.ps1: pnputil /disable-device 'HID\ELAN2514&Col01\5&3a1afda2&0&0000'
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> .\gsudo Start-Process powershell -wait -redirectstandardoutput C:\USERS\test\DOWNLOADS\test\stdout.txt -redirectstandarderror C:\USERS\test\DOWNLOADS\test\stderr.txt -argumentlist --% '-ExecutionPolicy Bypass -File C:\USERS\test\DOWNLOADS\test\test.ps1'
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # stdout: 楍牣獯景⁴湐⁐瑕汩瑩൹ഊ䐊獩扡楬杮搠癥捩㩥†††††䥈屄䱅乁㔲㐱䌦汯㄰ 㕜㌦ㅡ晡慤☲☰〰〰਍敄楶散搠獩扡敬⁤畳捣獥晳汵祬മഊ
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # decoded: ... Device disabled successfully.
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64>
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # test with pure powershell unelevated
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> powershell -ExecutionPolicy Bypass -File C:\USERS\test\DOWNLOADS\test\test.ps1 > C:\USERS\test\DOWNLOADS\test\stdout.txt 2>C:\USERS\test\DOWNLOADS\test\stderr.txt
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64>
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # Test with elevated wrapper
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> Start-Process powershell -wait -verb runas -argumentlist '-Command powershell -ExecutionPolicy Bypass -File C:\USERS\test\DOWNLOADS\test\test.ps1 > C:\USERS\test\DOWNLOADS\test\stdout.txt 2>C:\USERS\test\DOWNLOADS\test\stderr.txt'
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # This shows that an elevated wrapper around an inner redirecting powershell works. (stdout: ... Device disabled successfully.) However launching a second process is inefficient.
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> 
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # Test with Call operator, and bypass the policy in the parent powershell
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> Start-Process powershell -Wait -Verb RunAs -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "& C:\USERS\test\DOWNLOADS\test\test.ps1 > C:\USERS\test\DOWNLOADS\test\stdout.txt 2>C:\USERS\test\DOWNLOADS\test\stderr.txt")
+PS C:\USERS\test\DOWNLOADS\gsudo.portable\x64> # This works
+
+The workaround is then:
+Start-Process powershell -Wait -Verb RunAs -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "&$script >$stdout 2>$stderr")
+
+Now, we because we are redirecting to files, we need to make some tempfiles and read from them afterwards.
+
+with (
+    tempfile.NamedTemporaryFile(mode='wb', suffix='.ps1', delete=False) as script_tmp,
+    tempfile.NamedTemporaryFile(mode='wb', delete=False) as stdout_tmp,
+    tempfile.NamedTemporaryFile(mode='wb', delete=False) as stderr_tmp
+):
+                
+    script_tmp.write(script_content.encode('utf-16-le'))
+            
+    return script_tmp.name, stdout_tmp.name, stderr_tmp.name
+
+Here is where the confusion about encoding occurs. Powershell is horribly inconsistent regarding text encoding. In Windows Powershell (not Core), Out-File uses utf-16-le (Little Endian with a BOM, known as the "unicode" option), and Set-Content use ANSI ("Default"). > and >> have followed Out-File in using "Unicode" since [at least 2.0](https://superuser.com/questions/327492/default-powershell-to-emitting-utf-8-instead-of-utf-16). For the rant, see:
+- https://stackoverflow.com/questions/19122755/output-echo-a-variable-to-a-text-file
+- https://stackoverflow.com/questions/40098771/changing-powershells-default-output-encoding-to-utf-8
+- https://stackoverflow.com/questions/10655788/powershell-set-content-and-out-file-what-is-the-difference
+- https://stackoverflow.com/questions/13590749/reading-unicode-file-data-with-bom-chars-in-python
+
+So it is safest not set an encoding just yet when creating the file.
+We can add content like this:
+$script = '<script_file_abs_path'
+$content = Get-Content -LiteralPath $script -Encoding unicode -Raw
+Set-Content -LiteralPath $script -Value $content -Encoding unicode -Force # seems to prepend a BOM
+
+More interesting stuff on BOMs and encoding:
+Windows Powershell default to "unicode", whereas Core (commendably) changes to utf8nobom. The only cross-version method of converting a file to utf8nobom is to use New-Item, which curiously creates files with no BOM. Example:
+New-Item -Path $path -Value (Get-Content -LiteralPath $path -Raw) -Force
+
+I did a test for this method, to see what New-Item would convert.
+base = r'C:\USERS\test\DOWNLOADS\TEST'
+with open(base+r'\convertutf16.txt', encoding='utf-16', mode='w') as f: f.write('hello :)')
+
+with open(base+r'\convertutf16le.txt', encoding='utf-16-le', mode='w') as f: f.write('hello :)')
+
+with open(base+r'\convertutf8sig.txt', encoding='utf-8-sig', mode='w') as f: f.write('hello :)')
+
+with open(base+r'\convertutf8.txt', encoding='utf-8', mode='w') as f: f.write('hello :)')
+
+# utf-16: has a BOM: FF FE. This means it is actually utf-16-le (little endian)
+# utf-16-le: no BOM.
+# utf-8-sig: BOM: EF BB BF (identifies the file as utf-8)
+# utf-8: BOM: no BOM.
+
+with open(base+r'\convertutf16be.txt', encoding='utf-16-be', mode='w') as f: f.write('hello :)')
+
+# utf16be: no BOM. (le often has 0x00 on every second byte, be is opposite)
+
+After creating the files, I ran the command:
+foreach($path in @('convertutf16.txt', 'convertutf16le.txt', 'convertutf8sig.txt', 'convertutf8.txt', 'convertutf16be.txt')) {Convert-Utf8NoBom $path}
+
+But when I checked in python:
+for path in ['convertutf16.txt', 'convertutf16le.txt', 'convertutf8sig.txt', 'convertutf8.txt', 'convertutf16be.txt']:
+    with open(base+'\\'+path, encoding='utf-8', mode='r') as f:
+        content = f.read()
+    print(path, content)
+
+#output:
+#convertutf16.txt hello :)
+#convertutf16le.txt h
+#convertutf8sig.txt hello :)
+#convertutf8.txt hello :)
+#convertutf16be.txt 
+
+It turned out that with python's open(), utf-16-le has NO BOM, whereas utf-16 HAS A BOM (which, on Windows, identifies it to be the same as utf-16-le).
+
+Out-File prepends the FF FE BOM to its "unicode" encoding. When I ran `'hello :)' | Out-File convertutf16le.txt`, there was indeed a BOM. When I ran the Convert-Utf8NoBom command on that, it succeeded.
+
+Thus, python manipulation of utf-8/16 files needs to take into account the BOM (which may need to added or removed).
+Importantly, we have found that the New-File workaround requires a BOM to be present in the target file.
+
+Because the python test hadn't worked that well, I did it again with Out-File in powershell:
+
+PS C:\Users\test\downloads\test> 'hello :)' | Out-File convertutf16.txt -Force -Encoding unicode
+PS C:\Users\test\downloads\test> # Above edited with HxD to remove the BOM
+PS C:\Users\test\downloads\test> # Above is UTF-16-LE without BOM
+PS C:\Users\test\downloads\test>
+PS C:\Users\test\downloads\test> 'hello :)' | Out-File convertutf16le.txt -Force -Encoding unicode
+PS C:\Users\test\downloads\test> # UTF-16-LE with BOM
+PS C:\Users\test\downloads\test>
+PS C:\Users\test\downloads\test> 'hello :)' | Out-File convertutf8sig.txt -Force -Encoding utf8
+PS C:\Users\test\downloads\test> # UTF-8 with BOM
+PS C:\Users\test\downloads\test>
+PS C:\Users\test\downloads\test> 'hello :)' | Out-File convertutf8.txt -Force -Encoding utf8
+PS C:\Users\test\downloads\test> # Removed BOM with HxD - UTF-8 w/o BOM
+PS C:\Users\test\downloads\test>
+PS C:\Users\test\downloads\test> 'hello :)' | Out-File convertutf16be.txt -Force -Encoding bigendianunicode
+PS C:\Users\test\downloads\test> #UTF-16-BE with BOM
+PS C:\Users\test\downloads\test>
+PS C:\Users\test\downloads\test> # Extra test below: convertutf16 is convertutf16le without BOM, so create convertutf16b which is convertutf16be without BOM. (BOM removed with HxD)
+PS C:\Users\test\downloads\test> 'hello :)' | Out-File convertutf16b.txt -Force -Encoding bigendianunicode
+PS C:\Users\test\downloads\test>
+PS C:\Users\test\downloads\test>
+PS C:\Users\test\downloads\test> # Command
+PS C:\Users\test\downloads\test> foreach($path in @('convertutf16.txt', 'convertutf16le.txt', 'convertutf8sig.txt', 'convertutf8.txt', 'convertutf16be.txt', 'convertutf16b.txt')) {Convert-Utf8NoBom $path}
+PS C:\Users\test\downloads\test> # All the files except for utf16 and utf16b succeeded in converting to BOMless utf-8. These two were not utf-8 and had no BOM, hence the failure.
+
+Verify:
+
+for path in ['convertutf16.txt', 'convertutf16le.txt', 'convertutf8sig.txt', 'convertutf8.txt', 'convertutf16be.txt', 'convertutf16b.txt']:
+    try:
+        with open(base+'\\'+path, encoding='utf-8', mode='r') as f:
+            content = f.read()
+        print(path, content)
+    except Exception as e:
+        print(e)
+
+#output:
+#convertutf16.txt h
+#convertutf16le.txt hello :)
+
+#convertutf8sig.txt hello :)
+
+#convertutf8.txt hello :)
+
+#convertutf16be.txt hello :)
+
+#convertutf16b.txt
+
+
+Next step was to get the returncode of the command. While not strictly related, here are some examples I did that I thought were interesting:
+
+$lastexitcode demonstration:
+PS C:\WINDOWS\system32> $lastexitcode # Fresh powershell instance
+PS C:\WINDOWS\system32> $lastexitcode -eq $null
+True
+PS C:\WINDOWS\system32> hello
+hello : The term 'hello' is not recognized as the name of a cmdlet, function, script file, or operable program. Check
+the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:1
++ hello
++ ~~~~~
+    + CategoryInfo          : ObjectNotFound: (hello:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+PS C:\WINDOWS\system32> $lastexitcode -eq $null
+True
+PS C:\WINDOWS\system32> powershell -Command hello
+hello : The term 'hello' is not recognized as the name of a cmdlet, function, script file, or operable program. Check
+the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:1
++ hello
++ ~~~~~
+    + CategoryInfo          : ObjectNotFound: (hello:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+PS C:\WINDOWS\system32> $lastexitcode
+1
+PS C:\WINDOWS\system32> # When you typed 'hello', no such program existed, and no native exe was run, so $lastexitcode was not affected.
+PS C:\WINDOWS\system32> # However when you typed 'powershell -Command hello', the native exe 'powershell' was run, and it exited with 1, so $lastexitcode was set to 1.
+
+Regarding errors: 
+Unlike python's exceptions, many errors ("non-terminating errors") in powershell don't interrupt program execution and just print a message to stderr. Such messages can usually be redirected, e.g. `Write-Error 'Failed' 2>$null`, but others (e.g. division by zero) cannot. Terminating errors on the other hand DO interrupt execution.
+For a more precise definition, see:
+- https://www.reddit.com/r/PowerShell/comments/17f3dz9/confused_regarding_terminating_error_behavior/
+- https://stackoverflow.com/questions/78823402/powershell-terminating-errors-looking-for-examples
+- https://devblogs.microsoft.com/scripting/error-handling-two-types-of-errors/
+- https://github.com/MicrosoftDocs/PowerShell-Docs/issues/1583
+
+Both script- and statement- terminating errors can be caught by try/catch (see examples below). Things change when you use -ErrorAction or $ErrorActionPreference. When set to 'Stop', non-terminating errors are terminating; so on.
+
+PS C:\WINDOWS\system32> # Most errors in powershell don't terminate execution.
+PS C:\WINDOWS\system32> powershell -Command hello; echo Hi!
+hello : The term 'hello' is not recognized as the name of a cmdlet, function, script file, or operable program. Check
+the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:1
++ hello
++ ~~~~~
+    + CategoryInfo          : ObjectNotFound: (hello:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+Hi!
+PS C:\WINDOWS\system32> powershell -Command hello 2>$null; echo Hi!
+Hi!
+PS C:\WINDOWS\system32> # Some errors can't be suppressed:
+PS C:\WINDOWS\system32> $a = 1/0 2>$null; echo Hi!
+Attempted to divide by zero.
+At line:1 char:1
++ $a = 1/0 2>$null; echo Hi!
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], RuntimeException
+    + FullyQualifiedErrorId : RuntimeException
+
+Hi!
+PS C:\WINDOWS\system32> # Script-terminating error:
+PS C:\WINDOWS\system32> throw 'hello' 2>$null; echo Hi!
+hello
+At line:1 char:1
++ throw 'hello' 2>$null; echo Hi!
++ ~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (hello:String) [], RuntimeException
+    + FullyQualifiedErrorId : hello
+PS C:\WINDOWS\system32> # throw can be caught:
+PS C:\WINDOWS\system32> try {throw} catch {}
+PS C:\WINDOWS\system32> # Non-terminating error (cannot be caught):
+PS C:\WINDOWS\system32> Write-Error 'Failed' 2>$null # suppressed
+PS C:\WINDOWS\system32> try {write-error 'failed'} catch {}
+try {write-error 'failed'} catch {} : failed
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+
+Examples with $ErrorActionPreference, $PSDefaultParameterValues, to prevent [silently continuing](https://stackoverflow.com/questions/9948517/how-to-stop-a-powershell-script-on-the-first-error):
+
+PS C:\Users\test> $ErrorActionPreference = "Stop"
+PS C:\Users\test> $PSDefaultParameterValues['*:ErrorAction']='Stop'
+PS C:\Users\test>
+PS C:\Users\test> powershell -Command hello; echo Hi!
+hello : The term 'hello' is not recognized as the name of a cmdlet, function, script file, or operable program. Check
+the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At line:1 char:1
++ hello
++ ~~~~~
+    + CategoryInfo          : ObjectNotFound: (hello:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CommandNotFoundException
+
+Hi!
+PS C:\Users\test> powershell -Command hello 2>$null; echo Hi!
+powershell : hello : The term 'hello' is not recognized as the name of a cmdlet, function, script file, or operable
+program. Check
+At line:1 char:1
++ powershell -Command hello 2>$null; echo Hi!
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (hello : The ter...program. Check :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+PS C:\Users\test> $a = 1/0; echo Hi!
+Attempted to divide by zero.
+At line:1 char:1
++ $a = 1/0; echo Hi!
++ ~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : RuntimeException
+
+PS C:\Users\test> $a = 1/0 2>$null; echo Hi!
+Attempted to divide by zero.
+At line:1 char:1
++ $a = 1/0 2>$null; echo Hi!
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : RuntimeException
+
+PS C:\Users\test> throw 'hello' 2>$null; echo Hi!
+hello
+At line:1 char:1
++ throw 'hello' 2>$null; echo Hi!
++ ~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (hello:String) [], RuntimeException
+    + FullyQualifiedErrorId : hello
+
+Or with different modes:
+
+PS C:\users\test\downloads> $ErrorActionPreference = 'Stop'
+PS C:\users\test\downloads> try {Write-Error 'Hello'} catch {echo caught}
+caught
+PS C:\users\test\downloads> try {Write-Error 'Hello'} catch {$_}
+try {Write-Error 'Hello'} catch {$_} : Hello
+At line:1 char:6
++ try {Write-Error 'Hello'} catch {$_}
++      ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+
+PS C:\users\test\downloads> Write-Error 'Hello'; echo Hello
+Write-Error 'Hello'; echo Hello : Hello
+At line:1 char:1
++ Write-Error 'Hello'; echo Hello
++ ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+
+PS C:\users\test\downloads> Write-Error 'Hello' 2>$null; echo Hello
+Write-Error 'Hello' 2>$null; echo Hello : Hello
+At line:1 char:1
++ Write-Error 'Hello' 2>$null; echo Hello
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+
+PS C:\users\test\downloads> $ErrorActionPreference = 'Continue'
+PS C:\users\test\downloads> try {Write-Error 'Hello'} catch {echo caught}
+try {Write-Error 'Hello'} catch {echo caught} : Hello
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+
+PS C:\users\test\downloads> Write-Error 'Hello'; echo Hello
+Write-Error 'Hello'; echo Hello : Hello
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+
+Hello
+PS C:\users\test\downloads> Write-Error 'Hello' 2>$null; echo Hello
+Hello
+PS C:\users\test\downloads> Write-Error 'Hello' 2>$null; echo Hello
+Hello
+PS C:\users\test\downloads> $ErrorActionPreference = 'SilentlyContinue'
+PS C:\users\test\downloads> Write-Error 'Hello'; echo Hello
+Hello
+PS C:\users\test\downloads> try {Write-Error 'Hello'} catch {echo caught}
+PS C:\users\test\downloads> Write-Error 'Hello' 2>$null; echo Hello
+Hello
+PS C:\users\test\downloads> throw ''
+PS C:\users\test\downloads> throw ''; echo Hello # Even `throw` is suppressed with SilentlyContinue
+Hello
+
+More on Errors
+You should use $_ inside catch instead of $Error[0]. $Error should be used to access past errors, and should be accessed with $global:Error in modules. (https://stackoverflow.com/questions/78823402/powershell-terminating-errors-looking-for-examples)
+
+PS C:\users\test\downloads> $ErrorActionPreference = 'Stop'
+PS C:\users\test\downloads> try {Write-Error 'Hello'} catch {$_}
+try {Write-Error 'Hello'} catch {$_} : Hello
+At line:1 char:6
++ try {Write-Error 'Hello'} catch {$_}
++      ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+
+PS C:\users\test\downloads> try {Write-Error 'Hello'} catch {$_ | Format-List *}
+try {Write-Error 'Hello'} catch {$_ | Format-List *} : Hello
+At line:1 char:6
++ try {Write-Error 'Hello'} catch {$_ | Format-List *}
++      ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+
+PS C:\users\test\downloads> try {Write-Error 'Hello'} catch {$_ | Format-List * | Out-String}
+try {Write-Error 'Hello'} catch {$_ | Format-List * | Out-String} : Hello
+At line:1 char:6
++ try {Write-Error 'Hello'} catch {$_ | Format-List * | Out-String}
++      ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:) [Write-Error], WriteErrorException
+    + FullyQualifiedErrorId : Microsoft.PowerShell.Commands.WriteErrorException
+
+An important [disctinction](https://stackoverflow.com/questions/48528438/error-redirection-is-not-working-in-powershell) to make especially when redirecting errors: the command/script you run can generate errors, but powershell itself when parsing your command can also generate errors, and these might not be redirectable.
+
+Example: consider script.ps1, which contains a line `exit 11`. If we do:
+powershell -NoProfile -ExecutionPolicy Bypass -File script.ps1
+and check $lastexitcode, we will find the code to be 1. this is because `exit` does not propogate the error, and powershell by default should return 0 or 1.
+
+Pattern:
+try { &$script 6>&1 5>&1 4>&1 3>&1 >$stdout 2>$stderr } catch { (`$_ | Out-String) | Out-File -LiteralPath $stderr -Append -Force; exit 1 }
+
+This does a few things:
+- Executes the script, redirecting & collapsing the 7 streams to stdout and stderr
+- In case of a terminating error, the catch ensures the error is appended to stderr
+- Powershell -Command a;b;c would yield the exit code of the last native program/command (which is c). Here, it would mean getting Out-File instead of script.ps1. Thus, we explicitly exit 1 to avoid exiting 0 when Out-File is successful.
+
+Script exit codes
+$LASTEXITCODE is an automatic variable set by native Windows programs (not a cmdlet). This means .bat, .exe, .com, but NOT .ps1. One of two conditions must be met for it to set the variable:
+1. The script calls a native Windows program. The exit code of the last such program to run is then set as the script's exit code, if there is no `exit` statement after the call.
+2. The script executes `exit <code>`. This explicitly sets the value.
+
+Note that $lastexitcode is globally shared. So:
+PS C:\USERS\test\DOWNLOADS> $ErrorActionPreference = 'SilentlyContinue'
+PS C:\USERS\test\DOWNLOADS> 'echo $ErrorActionPreference'>test.ps1
+PS C:\USERS\test\DOWNLOADS> .\test.ps1 # scripts enabled for this demo
+SilentlyContinue
+
+But:
+
+PS C:\USERS\test\DOWNLOADS> powershell -Command '.\test.ps1'
+Continue
+
+Which is good, because we can set our own automatic variables in the script.
+```
