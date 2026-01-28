@@ -100,26 +100,7 @@ class CardController(Base):
         
         return Info.showinfo(title='Success', message=f"Successfully {new.lower()}d {self.name.lower()}")
     
-    def _power(self, new):
-        """Display power options (after successfully updating status)"""
-        res = Ask.button_option(
-            parent=self.root,
-            title='Power',
-            message=f"The computer may need to restart or sign out to complete the operation. Please save your work before proceeding.\nIf you notice {self.name.lower()} is already {new+'d'}, you can ignore this message.",
-            options=[
-                ('Sign out', 'signout'),
-                ('Restart', 'restart'),
-                ('Later', 'later')
-            ],
-            default='signout'
-        )
-        
-        if res == 'signout':
-            logoff()
-        elif res == 'restart':
-            restart()
-        elif res == 'later' or res is False: # Closed window
-            pass
+    
     
     @staticmethod
     def handle_error(func):

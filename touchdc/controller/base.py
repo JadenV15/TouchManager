@@ -13,6 +13,7 @@ class Base(ABC):
     """Base controller for a device 'card' """
     NAME = '<undefined>'
     
+    @abstractmethod
     def __init__(self, model, view, name=None, root=None):
         self.model = model
         self.view = view
@@ -20,7 +21,7 @@ class Base(ABC):
         self.name = name or type(self).NAME
         self.root = root or tk._default_root
         
-        # call self.initialise
+        # Subclass: call super() init then do custom setup, then call self.initialise
     
     def initialise(self): # initialise, mind, not initialize
         """Setup the view"""
@@ -73,6 +74,27 @@ class Base(ABC):
             return const.capitalize() + 'd'
         elif const == self.model.NONE:
             return const.capitalize()
+            
+    def _power(self, new):
+        """Display power options dialog(after successfully updating status)"""
+        res = Ask.button_option(
+            parent=self.root,
+            title='Power',
+            message=f"The computer may need to restart or sign out to complete the operation. Please save your work before proceeding.\nIf you notice {self.name.lower()} is already {new+'d'}, you can ignore this message.",
+            options=[
+                ('Sign out', 'signout'),
+                ('Restart', 'restart'),
+                ('Later', 'later')
+            ],
+            default='signout'
+        )
+        
+        if res == 'signout':
+            logoff()
+        elif res == 'restart':
+            restart()
+        elif res == 'later' or res is False: # Closed window
+            pass
     
     @abstractmethod
     def refresh(self):

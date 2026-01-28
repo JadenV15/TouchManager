@@ -21,21 +21,21 @@ class Run:
         return path.replace("'", "''")
     
     @classmethod
-    def run_ps(cls, cmd, *, elevate=False, auto_elevate=True, propogate=True, check=False) -> tuple[int, str, str]:
+    def run_ps(cls, cmd, *, elevate=False, auto_elevate=True, propagate=True, check=False) -> tuple[int, str, str]:
         """Run a powershell command.
         Args:
             cmd: the command to run, as a string. If this is an empty string, a newline may be used instead
             elevate: whether to prompt for elevation before running the command.
             auto_elevate: whether to detect permission failures and rerun the command with elevation if needed
             check: whether to raise appropriate errors from the errors.py file based on text output. When check is False, everything is left to the caller; only a few fatal exceptions will be raised (see below)
-            propogate: whether to propogate the errorcode from the command itself, or return return powershell's errorcode (see info file for more info)
+            propagate: whether to propagate the exit code of the invoked command, or return PowerShell's exit code instead (see docstring)
         Returns:
             Tuple containing the returncode, stdout and stderr
         Raises:
             CommandError: a domain error (defined in error file) occurred, and no meaningful output was recorded; the result may be of interest to the caller (eg. User aborted)
             RuntimeError: fatal or unexpected internal error
         """
-        # See the info file for more info
+        # See the docstring for more info
         
         # Start hidden
         sinfo = None
@@ -83,7 +83,7 @@ class Run:
                         
                         (
                             "$arg = @('-NoProfile','-ExecutionPolicy','Bypass','-Command',\"try { &$script 6>&1 5>&1 4>&1 3>&1 >$stdout 2>$stderr; `$exitcode = `$lastexitcode; if (`$exitcode) { exit `$exitcode } else { exit 0 } } catch { (`$_ | Out-String) >>$stderr; exit 1 }\"); "
-                            if propogate
+                            if propagate
                             else
                             "$arg = @('-NoProfile','-ExecutionPolicy','Bypass','-Command',\"try { &$script 6>&1 5>&1 4>&1 3>&1 >$stdout 2>$stderr } catch { (`$_ | Out-String) >>$stderr; exit 1 }\"); "
                         ),
@@ -135,7 +135,7 @@ class Run:
                     "-Command",
                     (
                         cmd or r'"`n"' # Empty string causes "Cannot process the command because of a missing parameter. A command must follow -Command."
-                        if propogate
+                        if propagate
                         else
                         (
                             "powershell -NoProfile -Command "

@@ -1,4 +1,4 @@
-Making a util module to run powershell
+Making a util that runs powershell
 
 To run powershell, we can utilise python's subprocess module. Example:
 res = subprocess.run(['powershell', '-NoProfile', '-Command', cmd], capture_output=True, text=True)
@@ -491,14 +491,14 @@ $LASTEXITCODE is an automatic variable set by native Windows programs (not a cmd
 2. The script executes `exit <code>`. This explicitly sets the value.
 
 Note that $lastexitcode is globally shared. So:
-PS C:\USERS\JADEN\DOWNLOADS> $ErrorActionPreference = 'SilentlyContinue'
-PS C:\USERS\JADEN\DOWNLOADS> 'echo $ErrorActionPreference'>test.ps1
-PS C:\USERS\JADEN\DOWNLOADS> .\test.ps1 # scripts enabled for this demo
+PS C:\USERS\test\DOWNLOADS> $ErrorActionPreference = 'SilentlyContinue'
+PS C:\USERS\test\DOWNLOADS> 'echo $ErrorActionPreference'>test.ps1
+PS C:\USERS\test\DOWNLOADS> .\test.ps1 # scripts enabled for this demo
 SilentlyContinue
 
 But:
 
-PS C:\USERS\JADEN\DOWNLOADS> powershell -Command '.\test.ps1'
+PS C:\USERS\test\DOWNLOADS> powershell -Command '.\test.ps1'
 Continue
 
 Which is good, because we can set our own automatic variables in the script.

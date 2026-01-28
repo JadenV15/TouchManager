@@ -44,27 +44,6 @@ class AdvancedController(Base):
         action = new.lower()+'d' if new in (self.model.ENABLE, self.model.DISABLE) else 'cleared'
         return Info.showinfo(title='Success', message=f"Successfully {action}", parent=self.view)
     
-    def _power(self, new):
-        """Display power options"""
-        res = Ask.button_option(
-            parent=self.root,
-            title='Power',
-            message=f"The computer may need to restart or sign out to complete the operation. Please save your work before proceeding.\nIf you notice {self.name.lower()} is already {new+'d'}, you can ignore this message.",
-            options=[
-                ('Sign out', 'signout'),
-                ('Restart', 'restart'),
-                ('Later', 'later')
-            ],
-            default='signout'
-        )
-        
-        if res == 'signout':
-            logoff()
-        elif res == 'restart':
-            restart()
-        elif res == 'later' or res is False: # Closed window
-            pass
-    
     def toggle(self, mode, old, new):
         """Change status from old to new"""
         if self._confirm_change(mode, old, new):

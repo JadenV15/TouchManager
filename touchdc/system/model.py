@@ -70,7 +70,7 @@ class Device(Observable):
     @staticmethod
     def handle_error(func):
         """Handles errors that may occur during operation
-        Takes errors generated from lower utils such as Run and Reg, and wraps them in the model's own errors, to be propogated to a higher-level entity (i.e. controller)
+        Takes errors generated from lower utils such as Run and Reg, and wraps them in the model's own errors, to be propagated to a higher-level entity (i.e. controller)
         """
         @wraps(func)
         def magic(*args, **kw):
