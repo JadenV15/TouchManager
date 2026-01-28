@@ -1,3 +1,5 @@
+![Repo icon](https://github.com/JadenV15/TouchManager/blob/main/touchdc/assets/icon.png)
+
 # Touch Device Manager
 
 **Touch Manager** is a small, functional Tkinter app that demonstrates the **Model–View–Controller (MVC)** framework.  
