@@ -1,4 +1,4 @@
-![Repo icon](https://github.com/JadenV15/TouchManager/blob/main/touchdc/assets/icon.png)
+<img src="https://github.com/JadenV15/TouchManager/blob/main/touchdc/assets/icon.png" alt="Icon" width=300>
 
 # Touch Device Manager
 
