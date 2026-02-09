@@ -187,21 +187,6 @@ class App(tk.Tk):
         self.wm_geometry(f"{width}x{height}+{x}+{y}") # use `wm_geometry` instead of `geometry` due to DPI awareness
         self.minsize(self.winfo_reqwidth(), self.winfo_reqheight())
         self.deiconify()
-    
-    '''def _redraw(self):
-        self.update_idletasks()
-        for w in self.winfo_children():
-            #w.update_idletasks()
-            w.destroy()
-        self.draw()
-        self.position()
-        self.update_idletasks()
-        
-        for c in [self.touchscreen, self.touchpad]:
-            c.refresh_cmd()
-            
-    def redraw(self):
-        self.after(10, self._redraw)''' # Forget about zoom - is hell
 
 if __name__ == "__main__":
     app = App()
